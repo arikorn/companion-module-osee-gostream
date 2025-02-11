@@ -6,7 +6,7 @@ import type { CompanionActionDefinitions } from '@companion-module/base'
 import { TransitionStyleChoice, WipeDirectionChoices, SwitchChoices, KeySwitchChoices } from '../../model'
 import { getInputChoices } from './../../models'
 import { GoStreamModel } from '../../models/types'
-import { MixEffectStateT, TransitionKey } from './state'
+import { MixEffectStateT } from './state'
 
 function createActionName(name: string): string {
 	return 'MixEffect: ' + name
@@ -404,7 +404,7 @@ export function create(model: GoStreamModel, state: MixEffectStateT): CompanionA
 			},
 		},
 		[ActionId.TransitionSource]: {
-			name: createActionName('Set transition key switch'),
+			name: createActionName('Next Transition:Tie key to next transition'),
 			options: [
 				{
 					type: 'dropdown',
@@ -426,70 +426,65 @@ export function create(model: GoStreamModel, state: MixEffectStateT): CompanionA
 				},
 			],
 			callback: async (action) => {
-				const key = getOptNumber(action, 'KeySwitch')
+				const keyIdx = getOptNumber(action, 'KeySwitch')
 				const operation = getOptNumber(action, 'OnOffSwitch')
-				let num = state.transitionKeys
-
-				if (operation === 0) {
-					// OFF
-					if (key === 0) num &= ~TransitionKey.USK
-					if (key === 1) num &= ~TransitionKey.DSK
-					if (key === 2) num &= ~TransitionKey.BKGD
-				} else if (operation === 1) {
-					// ON
-					if (key === 0) num |= TransitionKey.USK
-					if (key === 1) num |= TransitionKey.DSK
-					if (key === 2) num |= TransitionKey.BKGD
-				} else if (operation === 2) {
-					// TOGGLE
-					if (key === 0) num ^= TransitionKey.USK
-					if (key === 1) num ^= TransitionKey.DSK
-					if (key === 2) num ^= TransitionKey.BKGD
-				} else {
-					console.log('Unknown operation')
+				const keyObj = KeySwitchChoices.find(item => item.id === keyIdx)
+				if (keyObj === undefined) {
+					console.log("Undefined KeySwitchChoices value")
 					return
 				}
-				await sendCommand(ActionId.TransitionSource, ReqType.Set, [num])
+				// ...else: keyObj is found (it always should be): we can proceed
+				const keyName = keyObj.label.toUpperCase()
+				let ntState = state.nextTState.copy()
+
+				switch (operation) {
+					case 0:
+						ntState[keyName] = false
+						break;
+					case 1:
+						ntState[keyName] = true
+						break;
+					case 2:
+						// Toggle
+						ntState[keyName] = !ntState[keyName]
+						break;
+					default:
+						console.log('Unknown operation')
+						return
+				}
+
+				await sendCommand(ActionId.TransitionSource, ReqType.Set, [ntState.pack()])
 			},
 		},
 		[ActionId.USKOnPreview]: {
-			name: createActionName('Set USK on preview bus'),
+			name: createActionName('Next Transition:Set USK on preview bus only'),
 			options: [
 				{
 					type: 'dropdown',
 					label: 'State',
 					id: 'USKPvwState',
 					choices: [
-						{ id: 0, label: 'Off' },
-						{ id: 1, label: 'On' },
-						{ id: 2, label: 'Toggle' },
+						{ id: 1, label: 'show in PVW' },
+						{ id: 0, label: 'hide in PVW' },
+						{ id: 2, label: 'toggle in PVW' },
 					],
 					default: 0,
 				},
 			],
 			callback: async (action) => {
-				let nextState = action.options.USKPvwState
-
-				if (nextState === 2) {
-					// Figure out if it is visible in pvw or not
-					if (state.tied && !(state.transitionKeys & TransitionKey.USK))
-						// it is currently visible, so should be hidden
-						nextState = 4
-					else if (!state.tied && state.transitionKeys & TransitionKey.USK)
-						// it is currently visible, so should be hidden. As it is on air we do this by tie:ing
-						nextState = 5
-					else if (state.tied && state.transitionKeys & TransitionKey.USK)
-						// it is currently hidden, so should be visible. As it is on air we do this by untie:ing
-						nextState = 4
-					else if (!state.tied && !(state.transitionKeys & TransitionKey.USK))
-						// it is currently hidden, so should be visible
-						nextState = 5
-				} else if (state.transitionKeys & TransitionKey.USK) {
-					// Invert next state if On Air is true
-					nextState = nextState === 5 ? 4 : 5
+				const choice = getOptNumber(action, 'USKPvwState')
+				const ntState = state.nextTState.copy()
+				if (choice == 2) {
+					// just toggle it
+					ntState.KEY = !ntState.KEY
+				} else if (state.keyOnAir) {
+					// if OnAir, "Key" logic is reversed
+					ntState.KEY = choice === 0
+				} else {
+					ntState.KEY = choice === 1
 				}
 
-				await sendCommand(ActionId.TransitionSource, ReqType.Set, [nextState])
+				await sendCommand(ActionId.TransitionSource, ReqType.Set, [ntState.pack()])
 			},
 		},
 	}

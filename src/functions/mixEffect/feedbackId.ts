@@ -17,7 +17,6 @@ export enum FeedbackId {
 	FTBAFV = 'FTBAFV',
 	TransitionSource = 'transitionSource',
 	TransitionSelection = 'transitionSelection',
-	TransitionKeySwitch = 'transitionKeySwitch',
 	KeyOnAir = 'keyOnAir',
 	DskOnAir = 'dskOnAir',
 	KeyOnPvw = 'keyOnPvw',

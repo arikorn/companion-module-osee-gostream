@@ -4,7 +4,7 @@ import { FeedbackId } from './feedbackId'
 import { TransitionStyleChoice, SwitchChoices, KeySwitchChoices } from '../../model'
 import { getInputChoices } from './../../models'
 import { GoStreamModel } from '../../models/types'
-import { MixEffectStateT, TransitionKey } from './state'
+import { MixEffectStateT } from './state'
 function createFeedbackName(name: string): string {
 	return 'MixEffect: ' + name
 }
@@ -63,8 +63,8 @@ export function create(model: GoStreamModel, state: MixEffectStateT): CompanionF
 		},
 		[FeedbackId.TransitionSource]: {
 			type: 'boolean',
-			name: createFeedbackName('Transition key state'),
-			description: 'Change bank style based on transition key state',
+			name: createFeedbackName('nextTransition key state'),
+			description: 'Change bank style based on next transition key state',
 			options: [
 				{
 					type: 'dropdown',
@@ -89,19 +89,18 @@ export function create(model: GoStreamModel, state: MixEffectStateT): CompanionF
 				bgcolor: combineRgb(255, 255, 0),
 			},
 			callback: (feedback) => {
-				const key = feedback.options.KeySwitch
+				const keyIdx = feedback.options.KeySwitch
 				const keystate = feedback.options.OnOffSwitch!
-				if (keystate === 0) {
-					if (key === 0) return (state.transitionKeys & TransitionKey.USK) !== 0
-					if (key === 1) return (state.transitionKeys & TransitionKey.DSK) !== 0
-					if (key === 2) return (state.transitionKeys & TransitionKey.BKGD) !== 0
-				} else if (keystate === 1) {
-					if (key === 0) return (state.transitionKeys & TransitionKey.USK) === 0
-					if (key === 1) return (state.transitionKeys & TransitionKey.DSK) === 0
-					if (key === 2) return (state.transitionKeys & TransitionKey.BKGD) === 0
-				}
 
-				return false
+				const keyObj = KeySwitchChoices.find(item => item.id === keyIdx)
+				if (keyObj === undefined) {
+					console.log("Undefined KeySwitchChoices value in nextTransition key state feedback")
+					return
+				}
+				// ...else: keyObj is found (it always should be): we can proceed
+				const keyName = keyObj.label.toUpperCase()
+
+				return keystate == 0 ? state.nextTState[keyName] : !state.nextTState[keyName] 
 			},
 		},
 		[FeedbackId.KeyOnAir]: {
@@ -338,8 +337,8 @@ export function create(model: GoStreamModel, state: MixEffectStateT): CompanionF
 				const seleOptions = feedback.options.MatchState
 				const BG = feedback.options.Background
 				const Key = feedback.options.Key
-				const BKGDArmed = (state.transitionKeys & TransitionKey.BKGD) > 0
-				const USKArmed = (state.transitionKeys & TransitionKey.USK) > 0
+				const BKGDArmed = state.nextTState.BKGD
+				const USKArmed = state.nextTState.KEY
 				switch (seleOptions) {
 					case 0:
 						if ((BG && BKGDArmed) || (Key && USKArmed)) {
@@ -364,40 +363,6 @@ export function create(model: GoStreamModel, state: MixEffectStateT): CompanionF
 					default:
 						return false
 				}
-			},
-		},
-		[FeedbackId.TransitionKeySwitch]: {
-			type: 'boolean',
-			name: createFeedbackName('Transition key switch'),
-			description: 'Set the special effect Transition key switch',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'Switch',
-					id: 'KeySwitch',
-					choices: KeySwitchChoices,
-					default: 2,
-				},
-			],
-			defaultStyle: {
-				color: combineRgb(0, 0, 0),
-				bgcolor: combineRgb(255, 255, 0),
-			},
-			callback: (feedback) => {
-				const seleOptions = feedback.options.KeySwitch
-				if (seleOptions && Array.isArray(seleOptions)) {
-					const arratOptions = Array.from(seleOptions)
-					if (arratOptions.includes(0) && state.transitionKeys & TransitionKey.USK) {
-						return true
-					}
-					if (arratOptions.includes(1) && state.transitionKeys & TransitionKey.DSK) {
-						return true
-					}
-					if (arratOptions.includes(2) && state.transitionKeys & TransitionKey.BKGD) {
-						return true
-					}
-					return false
-				} else return false
 			},
 		},
 	}
