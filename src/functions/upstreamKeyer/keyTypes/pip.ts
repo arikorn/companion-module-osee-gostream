@@ -1,10 +1,10 @@
 import { ActionId } from './../actionId'
-import { getOptNumber } from './../../../util'
+import { getOptNumber, getOptString } from './../../../util'
 import { SwitchChoices, KeyResizeSizeChoices } from './../../../model'
 import { ReqType, ActionType } from './../../../enums'
 import { sendCommand } from './../../../connection'
 import type { CompanionActionDefinitions } from '@companion-module/base'
-import { UpstreamKeyerStateT } from '../state'
+import { UpstreamKeyerStateT, USKKeyTypes } from '../state'
 import { GoStreamModel } from '../../../models/types'
 export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStateT): CompanionActionDefinitions {
 	return {
@@ -47,6 +47,18 @@ export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStat
 			name: 'UpStream Key:Set PIP X Position',
 			options: [
 				{
+					type: 'dropdown',
+					label: 'Type',
+					id: 'operation',
+					choices: [
+						{ id: 0, label: 'Absolute' },
+						{ id: 1, label: 'Relative' },
+						{ id: 2, label: 'Left Edge' },
+						{ id: 3, label: 'Right Edge' },
+					],
+					default: 0,
+				},
+				{
 					type: 'number',
 					label: 'X Position',
 					id: 'PipXPosition',
@@ -55,15 +67,67 @@ export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStat
 					step: 0.2,
 					default: 0,
 					range: true,
+					isVisible: (options) => !Object.keys(options).includes('operation') || options.operation === 0,
+				},
+				{
+					type: 'textinput',
+					label: 'X Position',
+					id: 'PipXPositionRel',
+					isVisible: (options) => options.operation === 1,
 				},
 			],
-			callback: async (action) => {
-				await sendCommand(ActionId.PipXPosition, ReqType.Set, [getOptNumber(action, 'PipXPosition')])
+			callback: async (action, context) => {
+				let newpos = 0
+				let operation = 0
+				// a little extra work for backwards compatibility (so can be used before or w/o upgrade script)
+				if (Object.keys(action.options).includes('operation')) {
+					operation = getOptNumber(action, 'operation')
+				}
+				if (action.options.operation == 0) {
+					//absolute
+					newpos = getOptNumber(action, 'PipXPosition')
+				} else {
+					let valueStr = await context.parseVariablesInString(getOptString(action, 'PipXPositionRel'))
+					const curPos = _state.keyInfo[USKKeyTypes.Pip].xPosition
+					const sizes = [0.25, 0.33, 0.5]
+					const pipSize = sizes[_state.keyInfo[USKKeyTypes.Pip].size]
+					const pixel = 9 / 1080
+					if (operation === 2) {
+						valueStr = 'LEFT'
+					} else if (operation === 3) {
+						valueStr = 'RIGHT'
+					}
+					let value = 0
+					switch (valueStr.toUpperCase()) {
+						case 'LEFT':
+							newpos = -16 + pipSize * 16 + 10 * pixel
+							break
+						case 'RIGHT':
+							newpos = 16 - pipSize * 16 - 10 * pixel
+							break
+						default:
+							value = Number(valueStr)
+							newpos = Math.min(16, Math.max(-16, value + curPos))
+					}
+				}
+				await sendCommand(ActionId.PipXPosition, ReqType.Set, [newpos])
 			},
 		},
 		[ActionId.PipYPosition]: {
 			name: 'UpStream Key:Set PIP Y Position',
 			options: [
+				{
+					type: 'dropdown',
+					label: 'Type',
+					id: 'operation',
+					choices: [
+						{ id: 0, label: 'Absolute' },
+						{ id: 1, label: 'Relative' },
+						{ id: 2, label: 'Top Edge' },
+						{ id: 3, label: 'Bottom Edge' },
+					],
+					default: 0,
+				},
 				{
 					type: 'number',
 					label: 'Y Position',
@@ -73,10 +137,50 @@ export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStat
 					step: 0.2,
 					default: 0,
 					range: true,
+					isVisible: (options) => !Object.keys(options).includes('operation') || options.operation === 0,
+				},
+				{
+					type: 'textinput',
+					label: 'Y Position',
+					id: 'PipYPositionRel',
+					isVisible: (options) => options.operation === 1,
 				},
 			],
-			callback: async (action) => {
-				await sendCommand(ActionId.PipYPosition, ReqType.Set, [getOptNumber(action, 'PipYPosition')])
+			callback: async (action, context) => {
+				let newpos = 0
+				let operation = 0
+				// a little extra work for backwards compatibility (so can be used before or w/o upgrade script)
+				if (Object.keys(action.options).includes('operation')) {
+					operation = getOptNumber(action, 'operation')
+				}
+				if (operation === 0) {
+					//absolute
+					newpos = getOptNumber(action, 'PipYPosition')
+				} else {
+					let valueStr = await context.parseVariablesInString(getOptString(action, 'PipYPositionRel'))
+					const curPos = _state.keyInfo[USKKeyTypes.Pip].yPosition
+					const sizes = [0.25, 0.33, 0.5]
+					const pipSize = sizes[_state.keyInfo[USKKeyTypes.Pip].size]
+					const pixel = 9 / 1080
+					let value = 0
+					if (operation === 2) {
+						valueStr = 'TOP'
+					} else if (operation === 3) {
+						valueStr = 'BOTTOM'
+					}
+					switch (valueStr.toUpperCase()) {
+						case 'TOP':
+							newpos = -9 + pipSize * 9 + 10 * pixel
+							break
+						case 'BOTTOM':
+							newpos = 9 - pipSize * 9 - 10 * pixel
+							break
+						default:
+							value = Number(valueStr)
+							newpos = Math.min(9, Math.max(-9, value + curPos))
+					}
+				}
+				await sendCommand(ActionId.PipYPosition, ReqType.Set, [newpos])
 			},
 		},
 		[ActionId.PipMaskEnable]: {
