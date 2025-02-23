@@ -6,7 +6,18 @@ import { sendCommand } from './../../../connection'
 import type { CompanionActionDefinitions } from '@companion-module/base'
 import { UpstreamKeyerStateT, USKKeyTypes } from '../state'
 import { GoStreamModel } from '../../../models/types'
-export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStateT): CompanionActionDefinitions {
+
+// #TODO: these constants should probably be embedded in the model
+const pipSizesPct = [0.25, 0.33, 0.5]
+// Osee[X/Y]Radius: Osee's units for positioning: -9..+9 vertically, -16 - 16 horizontally
+const OseeXRadius = 16.0
+const OseeYRadius = 9.0
+const imagePixelHeight = 1080
+const pixel = (2 * OseeYRadius) / imagePixelHeight // convert pixels to Osee's -9..+9 units (this is the same whether calculated for x or y)
+// #TODO: make edgeBuffer settable?
+const edgeBuffer = pixel * 5 // when using left/right/up/down, stay this far away from the edge.
+
+export function createPIPActions(model: GoStreamModel, state: UpstreamKeyerStateT): CompanionActionDefinitions {
 	return {
 		[ActionId.PipSource]: {
 			name: 'UpStream Key:Set Pip Source',
@@ -62,8 +73,8 @@ export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStat
 					type: 'number',
 					label: 'X Position',
 					id: 'PipXPosition',
-					min: -16,
-					max: 16,
+					min: -OseeXRadius,
+					max: OseeXRadius,
 					step: 0.2,
 					default: 0,
 					range: true,
@@ -83,15 +94,13 @@ export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStat
 				if (Object.keys(action.options).includes('operation')) {
 					operation = getOptNumber(action, 'operation')
 				}
-				if (action.options.operation == 0) {
+				if (operation == 0) {
 					//absolute
 					newpos = getOptNumber(action, 'PipXPosition')
 				} else {
 					let valueStr = await context.parseVariablesInString(getOptString(action, 'PipXPositionRel'))
-					const curPos = _state.keyInfo[USKKeyTypes.Pip].xPosition
-					const sizes = [0.25, 0.33, 0.5]
-					const pipSize = sizes[_state.keyInfo[USKKeyTypes.Pip].size]
-					const pixel = 9 / 1080
+					const curPos = state.keyInfo[USKKeyTypes.Pip].xPosition
+					const pipSizePct = pipSizesPct[state.keyInfo[USKKeyTypes.Pip].size]
 					if (operation === 2) {
 						valueStr = 'LEFT'
 					} else if (operation === 3) {
@@ -100,14 +109,15 @@ export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStat
 					let value = 0
 					switch (valueStr.toUpperCase()) {
 						case 'LEFT':
-							newpos = -16 + pipSize * 16 + 10 * pixel
+							// place the center of the window such that the left edge is edgeBuffer pixels from the left.
+							newpos = -OseeXRadius * (1 - pipSizePct) + edgeBuffer
 							break
 						case 'RIGHT':
-							newpos = 16 - pipSize * 16 - 10 * pixel
+							newpos = OseeXRadius * (1 - pipSizePct) - edgeBuffer
 							break
 						default:
 							value = Number(valueStr)
-							newpos = Math.min(16, Math.max(-16, value + curPos))
+							newpos = Math.min(OseeXRadius, Math.max(-OseeXRadius, value + curPos))
 					}
 				}
 				await sendCommand(ActionId.PipXPosition, ReqType.Set, [newpos])
@@ -132,8 +142,8 @@ export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStat
 					type: 'number',
 					label: 'Y Position',
 					id: 'PipYPosition',
-					min: -9.0,
-					max: 9.0,
+					min: -OseeYRadius,
+					max: OseeYRadius,
 					step: 0.2,
 					default: 0,
 					range: true,
@@ -158,10 +168,8 @@ export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStat
 					newpos = getOptNumber(action, 'PipYPosition')
 				} else {
 					let valueStr = await context.parseVariablesInString(getOptString(action, 'PipYPositionRel'))
-					const curPos = _state.keyInfo[USKKeyTypes.Pip].yPosition
-					const sizes = [0.25, 0.33, 0.5]
-					const pipSize = sizes[_state.keyInfo[USKKeyTypes.Pip].size]
-					const pixel = 9 / 1080
+					const curPos = state.keyInfo[USKKeyTypes.Pip].yPosition
+					const pipSizePct = pipSizesPct[state.keyInfo[USKKeyTypes.Pip].size]
 					let value = 0
 					if (operation === 2) {
 						valueStr = 'TOP'
@@ -170,10 +178,11 @@ export function createPIPActions(model: GoStreamModel, _state: UpstreamKeyerStat
 					}
 					switch (valueStr.toUpperCase()) {
 						case 'TOP':
-							newpos = -9 + pipSize * 9 + 10 * pixel
+							// place the center of the window such that the top edge is edgeBuffer pixels from the top.
+							newpos = -OseeYRadius * (1 - pipSizePct) + edgeBuffer
 							break
 						case 'BOTTOM':
-							newpos = 9 - pipSize * 9 - 10 * pixel
+							newpos = OseeYRadius * (1 - pipSizePct) - edgeBuffer
 							break
 						default:
 							value = Number(valueStr)
