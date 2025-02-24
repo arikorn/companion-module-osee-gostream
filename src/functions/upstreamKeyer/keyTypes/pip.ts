@@ -10,10 +10,10 @@ import { GoStreamModel } from '../../../models/types'
 // #TODO: these constants should probably be embedded in the model
 const pipSizesPct = [0.25, 0.33, 0.5]
 // Osee[X/Y]Radius: Osee's units for positioning: -9..+9 vertically, -16 - 16 horizontally
-const OseeXRadius = 16.0
-const OseeYRadius = 9.0
+const OseeHalfWidth = 16.0
+const OseeHalfHeight = 9.0
 const imagePixelHeight = 1080
-const pixel = (2 * OseeYRadius) / imagePixelHeight // convert pixels to Osee's -9..+9 units (this is the same whether calculated for x or y)
+const pixel = (2 * OseeHalfHeight) / imagePixelHeight // convert pixels to Osee's -9..+9 units (this is the same whether calculated for x or y)
 // #TODO: make edgeBuffer settable?
 const edgeBuffer = pixel * 5 // when using left/right/up/down, stay this far away from the edge.
 
@@ -73,8 +73,8 @@ export function createPIPActions(model: GoStreamModel, state: UpstreamKeyerState
 					type: 'number',
 					label: 'X Position',
 					id: 'PipXPosition',
-					min: -OseeXRadius,
-					max: OseeXRadius,
+					min: -OseeHalfWidth,
+					max: OseeHalfWidth,
 					step: 0.2,
 					default: 0,
 					range: true,
@@ -110,17 +110,24 @@ export function createPIPActions(model: GoStreamModel, state: UpstreamKeyerState
 					switch (valueStr.toUpperCase()) {
 						case 'LEFT':
 							// place the center of the window such that the left edge is edgeBuffer pixels from the left.
-							newpos = -OseeXRadius * (1 - pipSizePct) + edgeBuffer
+							newpos = -OseeHalfWidth * (1 - pipSizePct) + edgeBuffer
 							break
 						case 'RIGHT':
-							newpos = OseeXRadius * (1 - pipSizePct) - edgeBuffer
+							newpos = OseeHalfWidth * (1 - pipSizePct) - edgeBuffer
 							break
 						default:
 							value = Number(valueStr)
-							newpos = Math.min(OseeXRadius, Math.max(-OseeXRadius, value + curPos))
+							newpos = Math.min(OseeHalfWidth, Math.max(-OseeHalfWidth, value + curPos))
 					}
 				}
 				await sendCommand(ActionId.PipXPosition, ReqType.Set, [newpos])
+			},
+			learn: (action) => {
+				return {
+					...action.options,
+					operation: 0,
+					PipXPosition: state.keyInfo[USKKeyTypes.Pip].xPosition,
+				}
 			},
 		},
 		[ActionId.PipYPosition]: {
@@ -142,8 +149,8 @@ export function createPIPActions(model: GoStreamModel, state: UpstreamKeyerState
 					type: 'number',
 					label: 'Y Position',
 					id: 'PipYPosition',
-					min: -OseeYRadius,
-					max: OseeYRadius,
+					min: -OseeHalfHeight,
+					max: OseeHalfHeight,
 					step: 0.2,
 					default: 0,
 					range: true,
@@ -179,10 +186,10 @@ export function createPIPActions(model: GoStreamModel, state: UpstreamKeyerState
 					switch (valueStr.toUpperCase()) {
 						case 'TOP':
 							// place the center of the window such that the top edge is edgeBuffer pixels from the top.
-							newpos = -OseeYRadius * (1 - pipSizePct) + edgeBuffer
+							newpos = -OseeHalfHeight * (1 - pipSizePct) + edgeBuffer
 							break
 						case 'BOTTOM':
-							newpos = OseeYRadius * (1 - pipSizePct) - edgeBuffer
+							newpos = OseeHalfHeight * (1 - pipSizePct) - edgeBuffer
 							break
 						default:
 							value = Number(valueStr)
@@ -190,6 +197,13 @@ export function createPIPActions(model: GoStreamModel, state: UpstreamKeyerState
 					}
 				}
 				await sendCommand(ActionId.PipYPosition, ReqType.Set, [newpos])
+			},
+			learn: (action) => {
+				return {
+					...action.options,
+					operation: 0,
+					PipYPosition: state.keyInfo[USKKeyTypes.Pip].yPosition,
+				}
 			},
 		},
 		[ActionId.PipMaskEnable]: {
